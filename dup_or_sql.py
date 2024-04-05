@@ -469,5 +469,5 @@ def generate_daily_report(year, month, day):
         run_report(str(report_date), writer)
 
 
-current_time = datetime.utcnow()
-generate_daily_report_for_month(current_time.year, current_time.month)
+# current_time = datetime.utcnow()
+# generate_daily_report_for_month(current_time.year, current_time.month)
