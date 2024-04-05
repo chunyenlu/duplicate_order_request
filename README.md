@@ -37,22 +37,30 @@ By default the date ranges for searching duplication is 30 days. To extend the d
 substitute the number "30" in the first 2 CTE's, recent_or_with_patients,or_and_dups_in_range
 
 CTE definitions:
+
 recent_or_with_patients:
     All order requests with neither patient last name nor first name for the last 30 days,
     each OR record is amended with date interval from its previous duplicate instance if found,
     also with last created date for each duplicate sets
+    
 or_and_dups_in_range:
     find Count of duplicates for ORs in the last 30 days with duplicates
+    
 dups_ors_for_the_day:
     Retrieve all duplicates OR sets with its last instance of duplicate located in the report date
+    
 order_request_patch_info:
     Retrieve created_id and tkpc count from order request patches for each OR
+    
 salesforce_ids:
     Get list of salesforce ids for a matching clinic id from an OR
+    
 vendors:
     Get list of vendors for a matching clinic id from an OR
+    
 barcode_count:
     Get the number of barcodes for the OR's in the last 30 days with a matching clinic id
+    
 sample_count:
     Get sample count based on the converted order of an OR
 
