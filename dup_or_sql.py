@@ -9,7 +9,7 @@
 # data for each day within the month is added in separate tabs.
 # For the current month, the report would generate daily reports till the prior day
 #
-# The report can also be generated for a specific dayte only
+# The report can also be generated for a specific date only
 #
 # The Excel generation portion is based on Ben Tarr's original Django implementation
 #
