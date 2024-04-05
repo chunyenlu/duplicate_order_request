@@ -17,15 +17,15 @@ The Excel generation portion is based on Ben Tarr's original Django implementati
 To run the script:
 1. Establish tunnel to website clone
    ssh -4NL 5432:clone-db.awsphi.counsyl.com:5432 clone-web-phi.counsyl.com
-2. start Django Shell-Plus session for website: make shell
+2. Ttart Django Shell-Plus session for website: make shell
 3. pip install any missing packages: i.e ColorHash
 4. Copy and paste the entire script
-5. uncomment the last lines to generate the report for the current month
-6. run previous months' reports with generate_daily_report_for_month(year, month)
-   A month Excel file "duplicates-{month_name}-sql.xlsx is generated
-7. run daily report with generate_daily_report(year, month, day)
-   A daily Excel file "duplicates-{year}-{month}-{day}-sql.xlsx is generated
-   --Notice that the value for year, month, day are all in numbers
+5. Uncomment the last lines to generate the report for the current month
+6. Run previous months' reports with generate_daily_report_for_month(year, month).
+   -- A month Excel file "duplicates-{month_name}-sql.xlsx is generated
+7. Run daily report with generate_daily_report(year, month, day).
+   -- A daily Excel file "duplicates-{year}-{month}-{day}-sql.xlsx is generated
+   -- Notice that the value for year, month, day are all in numbers
 
 
 # SQL for the report
