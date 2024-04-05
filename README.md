@@ -1,4 +1,4 @@
-# Duplicate Order Request Report
+# Duplicate Order Requests Report
 
 
 This script creates a daily report for order order request duplicates. The order request duplicates
