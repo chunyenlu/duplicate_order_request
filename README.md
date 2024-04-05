@@ -1,7 +1,7 @@
 # Duplicate Order Requests Report
 
 
-This script creates a daily report for order order request duplicates. The order request duplicates
+This script creates a daily report for order order request duplicates. Order request duplicates
 are defined as follows:
   - lower case of both patient first name and last name are the same and neither are empty
   - within the same product id
