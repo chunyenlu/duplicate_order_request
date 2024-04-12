@@ -18,7 +18,7 @@ To run the script:
 1. Establish tunnel to website clone:
    ssh -4NL 5432:clone-db.awsphi.counsyl.com:5432 clone-web-phi.counsyl.com
 2. Ttart Django Shell-Plus session for website: make shell
-3. pip install any missing packages: i.e ColorHash
+3. pip install any missing packages: ColorHash, Jinja2
 4. Copy and paste the entire script
 5. Uncomment the last lines to generate the report for the current month
 6. To run previous months' reports, use: generate_daily_report_for_month(year, month).
