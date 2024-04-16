@@ -49,13 +49,29 @@ or_and_dups_in_range:
 
     find Count of duplicates for ORs in the last 30 days with duplicates
     
-dups_ors_for_the_day:
+initial_dups_ors_for_the_day:
 
     Retrieve all duplicates OR sets with its last instance of duplicate located in the report date
     
-order_request_patch_info:
+or_info:
 
     Retrieve created_id and tkpc count from order request patches for each OR
+
+patch_tests:
+
+    For each of the fist order request patch, retrieve the ordered list of all test_offereing_names
+
+order_request_patch_info:
+
+    gather created_id and tkpc count, list of test offering names of the first patch for each OR
+
+second_partition:
+
+    Partition again with new product partition key,. For genesight, the partition key is product name concatetend by test_offering_names. for all other product, just use the product name, Recompute the first created date for teh new partiton.
+
+dups_ors_for_the_day:
+
+    Get the list of duplicates with the last instance of duplicate matched the report date based on the new partition
     
 salesforce_ids:
 
@@ -68,7 +84,10 @@ vendors:
 barcode_count:
 
     Get the number of barcodes for the OR's in the last 30 days with a matching clinic id
-    
+
+sample_count:
+
+    Get the number of samples for each order
 sample_count:
 
     Get sample count based on the converted order of an OR
