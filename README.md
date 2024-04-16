@@ -37,6 +37,8 @@ and performance. The SQL can be run within 10 seconds
 By default the date ranges for searching duplication is 30 days. To extend the day range
 substitute the number "30" in the first 2 CTE's, recent_or_with_patients,or_and_dups_in_range
 
+Note that the SQL does window partitoned twice. The first parititon focus on reducing the records set to only duplicates with patient names / product id in the last 30 days. The second partition further refine the duplicates search for genesight to retrict only matched product+test_offering_name. The reason to do this is to aggreegate test offering name after the fiorst partitiion time so the base record set is much smaller with much better performance
+
 CTE definitions:
 
 recent_or_with_patients:
