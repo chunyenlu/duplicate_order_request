@@ -343,6 +343,7 @@ def run_report(end_date, writer):
                 jsonb_array_elements(data::jsonb->'order_product'->'sub_products')->>'test_offering_name' as test
             from ordering_orderrequestpatch patch
             join or_info on patch.id = or_info.first_patch_id
+            order by 1,2
         ) q
         group by 1
     ), order_request_patch_info as (
