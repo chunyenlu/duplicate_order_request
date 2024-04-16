@@ -17,7 +17,7 @@ The Excel generation portion is based on Ben Tarr's original Django implementati
 To run the script:
 1. Establish tunnel to website clone:
    ssh -4NL 5432:clone-db.awsphi.counsyl.com:5432 clone-web-phi.counsyl.com
-2. Ttart Django Shell-Plus session for website: make shell
+2. Start Django Shell-Plus session for website: make shell
 3. pip install any missing packages: ColorHash, Jinja2
 4. Copy and paste the entire script
 5. Uncomment the last lines to generate the report for the current month
@@ -37,7 +37,7 @@ and performance. The SQL can be run within 10 seconds
 By default the date ranges for searching duplication is 30 days. To extend the day range
 substitute the number "30" in the first 2 CTE's, recent_or_with_patients,or_and_dups_in_range
 
-Note that the SQL does window partitoned twice. The first parititon focus on reducing the records set to only duplicates with patient names / product id in the last 30 days. The second partition further refine the duplicates search for genesight to retrict only matched product+test_offering_name. The reason to do this is to aggreegate test offering name after the fiorst partitiion time so the base record set is much smaller with much better performance
+Note that the SQL does window partitoning twice. The first parititon focuses on reducing the record set to only duplicates with patient names / product id in the last 30 days. The second partition further refines the duplicate search for genesight to retrict only matched product+test_offering_name. The reason to do this separately is to aggreegate test offering name after the first partitiion time so the base record set is much smaller with much better performance
 
 CTE definitions:
 
