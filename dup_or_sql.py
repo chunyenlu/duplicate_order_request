@@ -9,7 +9,7 @@
 # data for each day within the month is added in separate tabs.
 # For the current month, the report would generate daily reports till the prior day
 #
-# The report can also be generated for a specific date only
+# The report can also be generated for a specific dayte only
 #
 # The Excel generation portion is based on Ben Tarr's original Django implementation
 #
@@ -58,6 +58,7 @@ FIELDS = [
     "vendors",
     "product_id",
     "product_name",
+    "test_offering_names",
     "order_flow",
     "tkpc",
     "order_sample_count",
@@ -320,26 +321,57 @@ def run_report(end_date, writer):
                count(*) over (partition by patient_first_name, patient_last_name, product_id) as ct
         from recent_or_with_patients
         where diff_date <= 30
-    ), dups_ors_for_the_day as (
+    ), initial_dups_ors_for_the_day as (
         select * from or_and_dups_in_range
         where ct > 1 and last_created_date::date = {end_date}::date
+    ) ,or_info as (
+        select dups.id as order_request_id,
+            sum(case when orp.created_by_endpoint='/sales/transfer-kits/' then 1
+                else 0
+                end) as tkpc_ct,
+            min(orp.id) as first_patch_id
+        from initial_dups_ors_for_the_day dups
+        left join ordering_orderrequestpatch orp on orp.order_request_id = dups.id
+        group by 1
+    ), patch_tests as (
+        select
+            id as patch_id,
+            string_agg(test,';') as tests
+        from (
+            select
+                patch.id,
+                jsonb_array_elements(data::jsonb->'order_product'->'sub_products')->>'test_offering_name' as test
+            from ordering_orderrequestpatch patch
+            join or_info on patch.id = or_info.first_patch_id
+        ) q
+        group by 1
     ), order_request_patch_info as (
         select
             or_info.order_request_id,
             or_info.tkpc_ct,
-            au.email as created_by_id
-        from
-            (select dups.id as order_request_id,
-                sum(case when orp.created_by_endpoint='/sales/transfer-kits/' then 1
-                    else 0
-                    end) as tkpc_ct,
-                min(orp.id) as first_patch_id
-                from dups_ors_for_the_day dups
-                left join ordering_orderrequestpatch orp on orp.order_request_id = dups.id
-                group by 1
-            ) or_info
+            au.email as created_by_id,
+            patch_tests.tests
+        from or_info
+        left join patch_tests on  patch_tests.patch_id = or_info.first_patch_id
         left join ordering_orderrequestpatch orp on orp.id = or_info.first_patch_id
         left join auth_user au on au.id = orp.created_by_id
+    ), second_partition as (
+        select *,
+        max(created_at) over (partition by lower(patient_first_name), lower(patient_last_name), product_parititon_key) as last_created_at,
+        count(*) over (partition by lower(patient_first_name), lower(patient_last_name), product_parititon_key) as sp_ct
+        from (
+            select dups.*,
+            (case when op.slug = 'genesight' then op.name || patch_info.tests
+                 else op.name
+                 end) as product_parititon_key
+            from initial_dups_ors_for_the_day dups
+            join order_product op on op.id = dups.product_id
+            left join order_request_patch_info patch_info on patch_info.order_request_id = dups.id
+        ) q
+    ), dups_ors_for_the_day as (
+        select *
+        from second_partition sp
+        where sp.sp_ct > 1 and  sp.last_created_at::date = {end_date}::date
     ), salesforce_ids as (
     select
         clinic_id,
@@ -406,6 +438,7 @@ def run_report(end_date, writer):
         bc.barcode_count as clinic_barcode_volume,
         clinic.emr_enabled_on as clinic_emr_enabled_on,
         orp.created_by_id,
+        orp.tests as test_offering_names,
         vendors.vendors,
         g.product_id,
         op.name as product_name,
@@ -469,5 +502,5 @@ def generate_daily_report(year, month, day):
         run_report(str(report_date), writer)
 
 
-# current_time = datetime.utcnow()
-# generate_daily_report_for_month(current_time.year, current_time.month)
+#current_time = datetime.utcnow()
+#generate_daily_report_for_month(current_time.year, current_time.month)
