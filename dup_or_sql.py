@@ -63,6 +63,9 @@ FIELDS = [
     "tkpc",
     "order_sample_count",
     "converted",
+    "speciman_barcode",
+    "specimen_collection_date",
+    "raw_panel_code"
 ]
 
 #
@@ -308,22 +311,27 @@ def run_report(end_date, writer):
     """
     print(f"Preparing Duplicates OR Report for {end_date}...")
     sql_query = """
-    with recent_or_with_patients as (
+    with report_date as (
+        select {end_date}::date as report_date
+    ), recent_or_with_patients as (
         select oo1.*,
  --           lag(oo1.created_at, 1) over (partition by lower(oo1.patient_first_name), lower(oo1.patient_last_name), oo1.product_id order by created_at) as prev_date,
-            max(oo1.created_at) over (partition by lower(oo1.patient_first_name), lower(oo1.patient_last_name), oo1.product_id) as last_created_date,
-            coalesce((extract(epoch from (oo1.created_at - lag(oo1.created_at, 1) over (partition by lower(oo1.patient_first_name), lower(oo1.patient_last_name), oo1.product_id order by created_at)))/86400)::int, 0) as diff_date
-        from ordering_orderrequest oo1
-        where oo1.created_at > {end_date}::date - (30)
+            max(oo1.created_at) over (partition by lower(oo1.patient_first_name), lower(oo1.patient_last_name), oo1.patient_dob, oo1.product_id) as last_created_date,
+            coalesce((extract(epoch from (oo1.created_at - lag(oo1.created_at, 1) over (partition by lower(oo1.patient_first_name), lower(oo1.patient_last_name), oo1.patient_dob, oo1.product_id order by created_at)))/86400)::int, 0) as diff_date
+        from ordering_orderrequest oo1, report_date rd
+        where oo1.created_at > rd.report_date - (30) and oo1.created_at < rd.report_date + interval '1 day'
           and not (coalesce(patient_first_name, '') = '' or coalesce(patient_last_name, '') = '')
     ), or_and_dups_in_range as (
         select *,
-               count(*) over (partition by patient_first_name, patient_last_name, product_id) as ct
+               count(*) over (partition by lower(patient_first_name), lower(patient_last_name), patient_dob, product_id) as ct
         from recent_or_with_patients
         where diff_date <= 30
     ), initial_dups_ors_for_the_day as (
-        select * from or_and_dups_in_range
-        where ct > 1 and last_created_date::date = {end_date}::date
+    select *
+    from or_and_dups_in_range, report_date
+    where ct
+        > 1
+      and last_created_date::date = report_date.report_date
     ) ,or_info as (
         select dups.id as order_request_id,
             sum(case when orp.created_by_endpoint='/sales/transfer-kits/' then 1
@@ -358,8 +366,8 @@ def run_report(end_date, writer):
         left join auth_user au on au.id = orp.created_by_id
     ), second_partition as (
         select *,
-        max(created_at) over (partition by lower(patient_first_name), lower(patient_last_name), product_parititon_key) as last_created_at,
-        count(*) over (partition by lower(patient_first_name), lower(patient_last_name), product_parititon_key) as sp_ct
+        max(created_at) over (partition by lower(patient_first_name), lower(patient_last_name), patient_dob, product_parititon_key) as last_created_at,
+        count(*) over (partition by lower(patient_first_name), lower(patient_last_name), patient_dob, product_parititon_key) as sp_ct
         from (
             select dups.*,
             (case when op.slug = 'genesight' then op.name || patch_info.tests
@@ -371,12 +379,48 @@ def run_report(end_date, writer):
         ) q
     ), dups_ors_for_the_day as (
         select *
-        from second_partition sp
-        where sp.sp_ct > 1 and  sp.last_created_at::date = {end_date}::date
+        from second_partition sp, report_date rd
+        where sp.sp_ct > 1 and  sp.last_created_at::date = rd.report_date
+    ), or_specimen_data as (
+        select
+            order_request_id,
+            specimen_barcode,
+            specimen_collection_date
+        from
+        (
+            select
+                patch.order_request_id,
+                patch.id,
+                patch.created_at,
+                max(patch.created_at) over (partition by orq.id) as last_patch_date,
+                data::jsonb->'specimen'->>'barcode' as specimen_barcode,
+                data::jsonb->'specimen'->>'collection_date' as specimen_collection_date
+            from dups_ors_for_the_day orq
+            join ordering_orderrequestpatch patch on orq.id = patch.order_request_id
+            where data::jsonb ? 'specimen'
+        ) barcode
+        where last_patch_date = created_at
+    ), or_raw_panel_code as (
+        select
+            order_request_id,
+            raw_panel_code
+        from
+        (
+            select
+                patch.order_request_id,
+                patch.id,
+                patch.created_at,
+                max(patch.created_at) over (partition by orq.id) as last_patch_date,
+                data::jsonb->'external_identifiers'->>'raw_panel_code' as raw_panel_code
+            from dups_ors_for_the_day orq
+            join ordering_orderrequestpatch patch on orq.id = patch.order_request_id
+            where data::jsonb->'external_identifiers' ? 'raw_panel_code'
+        ) barcode
+        where last_patch_date = created_at
     ), salesforce_ids as (
-    select
-        clinic_id,
-        string_agg(sid.salesforce_id,',') as salesforces
+        select
+            clinic_id,
+            string_agg(sid.salesforce_id,',') as salesforces
         from
         (
             select
@@ -431,7 +475,7 @@ def run_report(end_date, writer):
         g.accession_id,
         requisition_number,
         barcode,
-        created_at,
+        g.created_at,
         g.clinic_id,
         clinic.external_id as clinic_external_id,
         salesforces.salesforces,
@@ -446,7 +490,10 @@ def run_report(end_date, writer):
         order_flow,
         coalesce(orp.tkpc_ct, 0) as tkpc,
         sc.sample_count as order_sample_count,
-        odr.id is not null as converted
+        odr.id is not null as converted,
+        specimen.specimen_barcode as speciman_barcode,
+        specimen.specimen_collection_date,
+        raw_panel.raw_panel_code
     from dups_ors_for_the_day g
     left join order_product op on op.id = g.product_id
     left join healthcare_clinic clinic on clinic.id = g.clinic_id
@@ -456,7 +503,9 @@ def run_report(end_date, writer):
     left join salesforce_ids salesforces on salesforces.clinic_id = g.clinic_id
     left join sample_count as sc on sc.order_request_id = g.id
     left join order_order odr on odr.order_request_uuid = g.uuid
-    order by g.product_id, patient_last_name, patient_first_name, created_at desc;
+    left join or_specimen_data specimen on specimen.order_request_id = g.id
+    left join or_raw_panel_code raw_panel on raw_panel.order_request_id = g.id
+    order by g.product_id, lower(patient_last_name), lower(patient_first_name), created_at desc;
     """
     sql_query = sql_query.format(end_date=f"'{end_date}'")
 
@@ -503,5 +552,5 @@ def generate_daily_report(year, month, day):
         run_report(str(report_date), writer)
 
 
-#current_time = datetime.utcnow()
-#generate_daily_report_for_month(current_time.year, current_time.month)
+# current_time = datetime.utcnow()
+# generate_daily_report_for_month(current_time.year, current_time.month)
