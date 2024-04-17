@@ -41,6 +41,10 @@ Note that the SQL does window partitoning twice. The first parititon focuses on 
 
 CTE definitions:
 
+report_date:
+
+    Centralized report date in one place
+
 recent_or_with_patients:
 
     All order requests with neither patient last name nor first name for the last 30 days,
@@ -74,6 +78,14 @@ second_partition:
 dups_ors_for_the_day:
 
     Get the list of duplicates with the last instance of duplicate matched the report date based on the new partition
+    
+or_specimen_data:
+
+    Get the specimen data from the last patch of an order request where the speciman data resides
+
+or_raw_panel_code
+
+    Get the external_identifiers-> raw_panel_code from the last patch of an order request where the raw_panel_code resides
     
 salesforce_ids:
 
