@@ -59,13 +59,15 @@ FIELDS = [
     "product_id",
     "product_name",
     "test_offering_names",
+    "test_statuses",
     "order_flow",
     "tkpc",
     "order_sample_count",
     "converted",
     "speciman_barcode",
     "specimen_collection_date",
-    "raw_panel_code"
+    "raw_panel_code",
+    "status",
 ]
 
 #
@@ -343,26 +345,36 @@ def run_report(end_date, writer):
         group by 1
     ), patch_tests as (
         select
-            id as patch_id,
-            string_agg(test,';') as tests
+            order_request_id,
+            string_agg(test,';') as tests,
+            string_agg(test_status,';') as statuses
         from (
-            select
-                patch.id,
-                jsonb_array_elements(data::jsonb->'order_product'->'sub_products')->>'test_offering_name' as test
-            from ordering_orderrequestpatch patch
-            join or_info on patch.id = or_info.first_patch_id
-            order by 1,2
-        ) q
-        group by 1
+            select *,
+                  max(id) over (partition by order_request_id, test) as last_patch
+            from (
+                select
+                    patch.id,
+                    patch.order_request_id,
+                    jsonb_array_elements(data::jsonb->'order_product'->'sub_products')->>'test_offering_name' as test,
+                    jsonb_array_elements(data::jsonb->'order_product'->'sub_products')->>'test_status' as test_status
+                from ordering_orderrequestpatch patch
+                join initial_dups_ors_for_the_day dups on dups.id = patch.order_request_id
+                where jsonb_typeof(data::jsonb->'order_product'->'sub_products') = 'array'
+                order by 1,2,3
+            ) q
+        )q1
+        where last_patch = id
+        group by order_request_id
     ), order_request_patch_info as (
         select
             or_info.order_request_id,
             or_info.tkpc_ct,
             au.email as created_by_id,
-            patch_tests.tests
+            patch_tests.tests,
+            patch_tests.statuses
         from or_info
-        left join patch_tests on  patch_tests.patch_id = or_info.first_patch_id
         left join ordering_orderrequestpatch orp on orp.id = or_info.first_patch_id
+        left join patch_tests on or_info.order_request_id = patch_tests.order_request_id
         left join auth_user au on au.id = orp.created_by_id
     ), second_partition as (
         select *,
@@ -417,7 +429,24 @@ def run_report(end_date, writer):
             where data::jsonb->'external_identifiers' ? 'raw_panel_code'
         ) barcode
         where last_patch_date = created_at
-    ), salesforce_ids as (
+    ), or_status_name as (
+        select
+            order_request_id,
+            status_name
+        from
+        (
+            select
+                patch.order_request_id,
+                patch.id,
+                patch.created_at,
+                max(patch.created_at) over (partition by orq.id) as last_patch_date,
+                data::jsonb->'status'->>'display_name' as status_name
+            from dups_ors_for_the_day orq
+            join ordering_orderrequestpatch patch on orq.id = patch.order_request_id
+            where data::jsonb->'status' ? 'display_name'
+        ) barcode
+        where last_patch_date = created_at
+     ), salesforce_ids as (
         select
             clinic_id,
             string_agg(sid.salesforce_id,',') as salesforces
@@ -484,6 +513,7 @@ def run_report(end_date, writer):
         clinic.emr_enabled_on as clinic_emr_enabled_on,
         orp.created_by_id,
         orp.tests as test_offering_names,
+        orp.statuses as test_statuses,
         vendors.vendors,
         g.product_id,
         op.name as product_name,
@@ -493,7 +523,8 @@ def run_report(end_date, writer):
         odr.id is not null as converted,
         specimen.specimen_barcode as speciman_barcode,
         specimen.specimen_collection_date,
-        raw_panel.raw_panel_code
+        raw_panel.raw_panel_code,
+        status_name.status_name as status
     from dups_ors_for_the_day g
     left join order_product op on op.id = g.product_id
     left join healthcare_clinic clinic on clinic.id = g.clinic_id
@@ -505,6 +536,7 @@ def run_report(end_date, writer):
     left join order_order odr on odr.order_request_uuid = g.uuid
     left join or_specimen_data specimen on specimen.order_request_id = g.id
     left join or_raw_panel_code raw_panel on raw_panel.order_request_id = g.id
+    left join or_status_name status_name on status_name.order_request_id = g.id
     order by g.product_id, lower(patient_last_name), lower(patient_first_name), created_at desc;
     """
     sql_query = sql_query.format(end_date=f"'{end_date}'")
